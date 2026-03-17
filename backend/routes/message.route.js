@@ -4,8 +4,8 @@ import { getConversations, getMessages, sendMessage, deleteMessage, markRead, up
 const router = express.Router();
 router.use(protect);
 router.get("/conversations", getConversations);
+router.put("/:userId/read", markRead);
+router.delete("/:messageId", deleteMessage);
 router.get("/:userId", getMessages);
 router.post("/:userId", uploadMsgImage, sendMessage);
-router.delete("/:messageId", deleteMessage);
-router.put("/:userId/read", markRead);
 export default router;

@@ -1,11 +1,8 @@
-import axios from "axios";
-
+﻿import axios from "axios";
 const api = axios.create({
   baseURL: "/api",
   withCredentials: true,
-  headers: { "Content-Type": "application/json" },
 });
-
 api.interceptors.response.use(
   (response) => response,
   (error) => {
@@ -15,5 +12,4 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
 export default api;

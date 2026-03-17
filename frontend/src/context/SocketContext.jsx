@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useEffect, useState } from "react";
+﻿import { createContext, useContext, useEffect, useState, useRef } from "react";
 import { io } from "socket.io-client";
 import { useAuthStore } from "./authStore";
 import IncomingCallAlert from "../components/call/IncomingCallAlert";
@@ -12,6 +12,8 @@ export const SocketProvider = ({ children }) => {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [incomingCall, setIncomingCall] = useState(null);
   const [activeCall, setActiveCall] = useState(null);
+  const [notifCount, setNotifCount] = useState(0);
+  const ringTimeoutRef = useRef(null);
   const { user, isAuthenticated } = useAuthStore();
 
   useEffect(() => {
@@ -20,46 +22,77 @@ export const SocketProvider = ({ children }) => {
         query: { userId: user._id },
         withCredentials: true,
       });
+
       newSocket.on("onlineUsers", (users) => setOnlineUsers(users));
 
-      // Incoming call
+      newSocket.on("newNotification", () => setNotifCount(c => c + 1));
+
       newSocket.on("incomingCall", ({ from, fromName, fromAvatar, offer }) => {
-        setIncomingCall({ partnerId: from, partnerName: fromName, partnerAvatar: fromAvatar, offer, isIncoming: true });
+        setIncomingCall({
+          partnerId: from,
+          partnerName: fromName || "Unknown",
+          partnerAvatar: fromAvatar || "",
+          offer,
+          isIncoming: true,
+        });
+        // Auto reject after 30 seconds
+        if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+        ringTimeoutRef.current = setTimeout(() => {
+          newSocket.emit("rejectCall", { to: from });
+          setIncomingCall(null);
+        }, 30000);
+      });
+
+      newSocket.on("callRejected", () => {
+        setActiveCall(null);
+        if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+      });
+
+      newSocket.on("callEnded", () => {
+        setActiveCall(null);
+        setIncomingCall(null);
+        if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
       });
 
       setSocket(newSocket);
-      return () => newSocket.close();
+      return () => {
+        newSocket.close();
+        if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+      };
     } else {
       if (socket) { socket.close(); setSocket(null); }
     }
   }, [isAuthenticated, user?._id]);
 
-  const startCall = (partner) => {
-    setActiveCall({
-      partnerId: partner._id,
-      partnerName: partner.username,
-      partnerAvatar: partner.avatar,
-      isIncoming: false,
-    });
+  const startCall = (partnerId, partnerInfo) => {
+    const id = partnerId || partnerInfo?._id;
+    const name = partnerInfo?.username || partnerInfo?.fullName || "User";
+    const avatar = partnerInfo?.avatar || "";
+    setActiveCall({ partnerId: id, partnerName: name, partnerAvatar: avatar, isIncoming: false });
   };
 
   const acceptCall = () => {
-    setActiveCall(incomingCall);
+    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+    setActiveCall({ ...incomingCall });
     setIncomingCall(null);
   };
 
   const rejectCall = () => {
-    if (socket && incomingCall) {
-      socket.emit("rejectCall", { to: incomingCall.partnerId });
-    }
+    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+    if (socket && incomingCall) socket.emit("rejectCall", { to: incomingCall.partnerId });
+    setIncomingCall(null);
+  };
+
+  const endCall = () => {
+    if (ringTimeoutRef.current) clearTimeout(ringTimeoutRef.current);
+    if (socket && activeCall) socket.emit("endCall", { to: activeCall.partnerId });
+    setActiveCall(null);
     setIncomingCall(null);
   };
 
   return (
-    <SocketContext.Provider value={{ socket, onlineUsers, startCall }}>
+    <SocketContext.Provider value={{ socket, onlineUsers, startCall, endCall, notifCount, setNotifCount }}>
       {children}
-
-      {/* Incoming call alert */}
       {incomingCall && !activeCall && (
         <IncomingCallAlert
           callData={incomingCall}
@@ -67,14 +100,12 @@ export const SocketProvider = ({ children }) => {
           onReject={rejectCall}
         />
       )}
-
-      {/* Active video call */}
       {activeCall && socket && (
         <VideoCall
           socket={socket}
           callData={activeCall}
           currentUser={user}
-          onClose={() => setActiveCall(null)}
+          onClose={endCall}
         />
       )}
     </SocketContext.Provider>

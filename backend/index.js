@@ -24,6 +24,7 @@ export const io = new Server(httpServer, {
   cors: { origin: process.env.CLIENT_URL, credentials: true },
 });
 
+app.set("io", io);
 export const onlineUsers = new Map();
 app.set("onlineUsers", onlineUsers);
 
@@ -47,8 +48,13 @@ io.on("connection", (socket) => {
   // Video calling
   socket.on("callUser", ({ to, offer, from, fromName, fromAvatar }) => {
     const receiverSocket = onlineUsers.get(to);
+    console.log(`Call from ${from} to ${to} - receiver online: ${!!receiverSocket}`);
+    console.log("Online users:", Array.from(onlineUsers.keys()));
     if (receiverSocket) {
       io.to(receiverSocket).emit("incomingCall", { from, fromName, fromAvatar, offer });
+    } else {
+      // Notify caller that recipient is offline
+      io.to(socket.id).emit("callRejected", { reason: "User is offline" });
     }
   });
 
@@ -79,7 +85,8 @@ io.on("connection", (socket) => {
 });
 
 app.use(cors({ origin: process.env.CLIENT_URL, credentials: true }));
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.use(cookieParser());
 
 app.use("/api/auth", authRoutes);
@@ -99,4 +106,8 @@ mongoose.connect(process.env.MONGODB_URI)
     });
   })
   .catch((err) => console.error("MongoDB error:", err));
+
+
+
+
 

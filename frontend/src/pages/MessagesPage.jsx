@@ -135,10 +135,7 @@ export default function MessagesPage() {
 
   const sendMsg = async (e) => {
     e.preventDefault();
-    if (!text.trim() && !imgFile) return;
-    const formData = new FormData();
-    if (text.trim()) formData.append("text", text);
-    if (imgFile) formData.append("image", imgFile);
+    if (!text?.trim() && !imgFile) return;
     const optimistic = {
       _id: Date.now().toString(),
       sender: user._id,
@@ -148,17 +145,29 @@ export default function MessagesPage() {
       createdAt: new Date().toISOString()
     };
     setMessages(prev => [...prev, optimistic]);
+    const savedText = text;
+    const savedImgFile = imgFile;
     setText(""); setImgFile(null); setImgPreview(null);
     try {
-      const r = await api.post(`/messages/${activeConvo._id?._id}`, formData);
+      let r;
+      if (savedImgFile) {
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(savedImgFile);
+        });
+        r = await api.post(`/messages/${activeConvo._id?._id}`, { text: savedText || "", image: base64 });
+      } else {
+        r = await api.post(`/messages/${activeConvo._id?._id}`, { text: savedText.trim() });
+      }
       setMessages(prev => prev.map(m => m._id === optimistic._id ? r.data.message : m));
       setConversations(prev => prev.map(c =>
-        c._id?._id === activeConvo._id?._id
-          ? { ...c, lastMessage: r.data.message }
-          : c
+        c._id?._id === activeConvo._id?._id ? { ...c, lastMessage: r.data.message } : c
       ));
-    } catch {
-      toast.error("Failed to send");
+    } catch (err) {
+      console.error("SEND ERROR:", err?.response?.data || err?.message || err);
+      toast.error("Failed to send: " + (err?.response?.data?.message || err?.message || "unknown error"));
       setMessages(prev => prev.filter(m => m._id !== optimistic._id));
     }
   };
@@ -416,3 +425,8 @@ export default function MessagesPage() {
     </div>
   );
 }
+
+
+
+
+

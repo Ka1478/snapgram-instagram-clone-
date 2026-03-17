@@ -22,7 +22,7 @@ router.get("/:tag", async (req, res) => {
   try {
     const { default: Post } = await import("../models/post.model.js");
     const hashtag = req.params.tag.toLowerCase().replace("#", "");
-    const posts = await Post.find({ hashtags: `#${hashtag}` })
+    const posts = await Post.find({ hashtags: hashtag })
       .populate("author", "username avatar fullName")
       .sort({ createdAt: -1 }).limit(30);
     res.json({ success: true, posts, hashtag, total: posts.length });
@@ -65,3 +65,4 @@ router.get("/posts/:postId/analytics", async (req, res) => {
 });
 
 export default router;
+

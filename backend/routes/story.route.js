@@ -1,0 +1,12 @@
+﻿import express from "express";
+import { protect } from "../middleware/auth.middleware.js";
+import { uploadStory } from "../middleware/upload.middleware.js";
+import { getStories, createStory, viewStory, replyStory, deleteStory } from "../controllers/story.controller.js";
+const router = express.Router();
+router.use(protect);
+router.get("/", getStories);
+router.post("/", uploadStory, createStory);
+router.post("/:storyId/view", viewStory);
+router.post("/:storyId/reply", replyStory);
+router.delete("/:storyId", deleteStory);
+export default router;

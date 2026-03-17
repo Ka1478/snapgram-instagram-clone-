@@ -1,0 +1,15 @@
+﻿import express from "express";
+import { protect } from "../middleware/auth.middleware.js";
+import { getUserProfile, updateProfile, toggleFollow, getSuggestedUsers, searchUsers, forgotPassword, resetPassword, deleteAccount } from "../controllers/user.controller.js";
+import { uploadAvatar } from "../middleware/upload.middleware.js";
+const router = express.Router();
+router.post("/forgot-password", forgotPassword);
+router.post("/reset-password", resetPassword);
+router.use(protect);
+router.get("/suggested", getSuggestedUsers);
+router.get("/search", searchUsers);
+router.put("/profile/update", uploadAvatar, updateProfile);
+router.delete("/account/delete", deleteAccount);
+router.get("/:username", getUserProfile);
+router.post("/:userId/follow", toggleFollow);
+export default router;

@@ -289,3 +289,5 @@ Dark/light mode is toggled via the `ThemeContext` and persisted in `localStorage
 ## 📝 License
 
 MIT © 2024 Snapgram
+#   s n a p g r a m  
+ 

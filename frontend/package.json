@@ -1,11 +1,11 @@
-{
+﻿{
   "name": "snapgram-frontend",
   "private": true,
   "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npx --yes vite build",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -29,3 +29,4 @@
     "vite": "^5.0.8"
   }
 }
+

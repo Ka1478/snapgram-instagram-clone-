@@ -223,4 +223,11 @@ export const getPostAnalytics = async (req, res) => {
   } catch (err) { res.status(500).json({ success: false, message: err.message }); }
 };
 
-
+export const uploadTempImage = async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ success: false, message: "Image required" });
+    res.json({ success: true, url: req.file.path });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};

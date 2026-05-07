@@ -47,6 +47,17 @@ const msgStorage = new CloudinaryStorage({
   },
 });
 
+const tempStorage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: "snapgram/temp",
+    allowed_formats: ["jpg", "jpeg", "png", "webp"],
+    transformation: [{ width: 1080, crop: "limit", quality: "auto" }],
+  },
+});
+
+export const uploadTemp = multer({ storage: tempStorage, limits: { fileSize: 5 * 1024 * 1024 } }).single("image");
+
 export const uploadPost = multer({ storage: postStorage, limits: { fileSize: 5 * 1024 * 1024 } }).single("image");
 export const uploadAvatar = multer({ storage: avatarStorage, limits: { fileSize: 2 * 1024 * 1024 } }).single("avatar");
 export const uploadReel = multer({ storage: reelStorage, limits: { fileSize: 50 * 1024 * 1024 } }).single("video");

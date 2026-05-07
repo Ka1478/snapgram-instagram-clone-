@@ -13,6 +13,7 @@ import messageRoutes from "./routes/message.route.js";
 import notificationRoutes from "./routes/notification.route.js";
 import storyRoutes from "./routes/story.route.js";
 import reelRoutes from "./routes/reel.route.js";
+import aiRoutes from "./routes/ai.route.js";
 import hashtagRoutes from "./routes/hashtag.route.js";
 
 dotenv.config();
@@ -103,6 +104,8 @@ app.use("/api/stories", storyRoutes);
 app.use("/api/reels", reelRoutes);
 app.use("/api/hashtags", hashtagRoutes);
 
+app.use("/api/ai", aiRoutes);
+
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("✅ MongoDB connected");
@@ -111,6 +114,7 @@ mongoose.connect(process.env.MONGODB_URI)
     });
   })
   .catch((err) => console.error("MongoDB error:", err));
+
 
 
 

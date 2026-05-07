@@ -1,7 +1,7 @@
 ﻿import express from "express";
 import { protect } from "../middleware/auth.middleware.js";
-import { createPost, getPost, updatePost, deletePost, getFeed, getExplorePosts, toggleLike, toggleSave, addComment, deleteComment, getSavedPosts, getTaggedPosts, addReaction, sharePost, getPostAnalytics } from "../controllers/post.controller.js";
-import { uploadPost } from "../middleware/upload.middleware.js";
+import { createPost, getPost, updatePost, deletePost, getFeed, getExplorePosts, toggleLike, toggleSave, addComment, deleteComment, getSavedPosts, getTaggedPosts, addReaction, sharePost, getPostAnalytics, uploadTempImage } from "../controllers/post.controller.js";
+import { uploadPost, uploadTemp } from "../middleware/upload.middleware.js";
 const router = express.Router();
 router.use(protect);
 router.get("/feed", getFeed);
@@ -9,6 +9,7 @@ router.get("/explore", getExplorePosts);
 router.get("/saved", getSavedPosts);
 router.get("/tagged/:userId", getTaggedPosts);
 router.post("/", uploadPost, createPost);
+router.post("/upload-temp", uploadTemp, uploadTempImage);
 router.get("/:postId", getPost);
 router.put("/:postId", updatePost);
 router.delete("/:postId", deletePost);

@@ -1,274 +1,238 @@
 ﻿import { useState, useRef } from "react";
-import { X, ImagePlus, ChevronLeft, Loader, Film, UserPlus, Search } from "lucide-react";
+import { X, Image, Film, Sparkles, RefreshCw, Check } from "lucide-react";
+import { useAuthStore } from "../../context/authStore";
+import { useTheme } from "../../context/ThemeContext";
 import api from "../../utils/api";
 import toast from "react-hot-toast";
 
-function TagPeopleModal({ tagged, onAdd, onRemove, onClose }) {
-  const [search, setSearch] = useState("");
-  const [results, setSearchResults] = useState([]);
+const STYLES = [
+  { key: "casual", label: "😊 Casual", desc: "Fun & relatable" },
+  { key: "inspirational", label: "✨ Inspire", desc: "Motivational" },
+  { key: "funny", label: "😂 Funny", desc: "Witty & humorous" },
+  { key: "professional", label: "💼 Pro", desc: "Business tone" },
+  { key: "minimal", label: "🤍 Minimal", desc: "Short & clean" },
+];
 
-  const handleSearch = async (q) => {
-    setSearch(q);
-    if (!q.trim()) { setSearchResults([]); return; }
-    try {
-      const res = await api.get(`/users/search?q=${q}`);
-      setSearchResults(res.data.users || []);
-    } catch {}
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/60 z-50 flex items-end md:items-center justify-center">
-      <div className="bg-white dark:bg-neutral-900 rounded-t-2xl md:rounded-2xl w-full md:max-w-sm">
-        <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-          <h3 className="font-semibold">Tag People</h3>
-          <button onClick={onClose}><X size={20} /></button>
-        </div>
-        <div className="p-4">
-          <div className="relative mb-3">
-            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input value={search} onChange={(e) => handleSearch(e.target.value)}
-              placeholder="Search people to tag..." autoFocus
-              className="w-full bg-gray-100 dark:bg-gray-800 rounded-xl pl-9 pr-4 py-2.5 text-sm outline-none" />
-          </div>
-
-          {/* Tagged people */}
-          {tagged.length > 0 && (
-            <div className="mb-3">
-              <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-2">Tagged</p>
-              <div className="flex flex-wrap gap-2">
-                {tagged.map((u) => (
-                  <div key={u._id} className="flex items-center gap-1.5 bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full text-sm">
-                    <img src={u.avatar || `https://ui-avatars.com/api/?name=${u.fullName}&background=random`} className="w-5 h-5 rounded-full object-cover" />
-                    @{u.username}
-                    <button onClick={() => onRemove(u._id)} className="ml-1 hover:text-red-500">
-                      <X size={12} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Search results */}
-          <div className="space-y-1 max-h-60 overflow-y-auto">
-            {results.length === 0 && search && (
-              <p className="text-center text-gray-400 text-sm py-4">No users found</p>
-            )}
-            {results.length === 0 && !search && (
-              <p className="text-center text-gray-400 text-sm py-4">Search for someone to tag</p>
-            )}
-            {results.map((u) => {
-              const isTagged = tagged.some(t => t._id === u._id);
-              return (
-                <button key={u._id} onClick={() => isTagged ? onRemove(u._id) : onAdd(u)}
-                  className="w-full flex items-center justify-between p-3 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 text-left">
-                  <div className="flex items-center gap-3">
-                    <img src={u.avatar || `https://ui-avatars.com/api/?name=${u.fullName}&background=random`}
-                      className="w-10 h-10 rounded-full object-cover" />
-                    <div>
-                      <p className="font-semibold text-sm">{u.username}</p>
-                      <p className="text-gray-500 text-xs">{u.fullName}</p>
-                    </div>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-colors ${isTagged ? "bg-blue-500 border-blue-500" : "border-gray-300"}`}>
-                    {isTagged && <X size={12} className="text-white" />}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-        <div className="p-4 border-t border-gray-200 dark:border-gray-700">
-          <button onClick={onClose} className="w-full btn-primary py-2.5">Done</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-export default function CreatePostModal({ onClose }) {
-  const [step, setStep] = useState("select");
-  const [image, setImage] = useState(null);
+export default function CreatePostModal({ onClose, onPostCreated }) {
+  const { user } = useAuthStore();
+  const { theme } = useTheme();
+  const isDark = theme === "dark";
+  const [tab, setTab] = useState("post");
+  const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [caption, setCaption] = useState("");
   const [location, setLocation] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [isReel, setIsReel] = useState(false);
-  const [taggedUsers, setTaggedUsers] = useState([]);
-  const [showTagModal, setShowTagModal] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [showAI, setShowAI] = useState(false);
+  const [aiStyle, setAiStyle] = useState("casual");
+  const [aiIdeas, setAiIdeas] = useState([]);
+  const [uploadedUrl, setUploadedUrl] = useState(null);
   const fileRef = useRef();
 
-  const handleFileSelect = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    if (isReel && !file.type.startsWith("video/")) { toast.error("Please select a video file"); return; }
-    if (!isReel && !file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
-    setImage(file);
-    setPreview(URL.createObjectURL(file));
-    setStep("edit");
+  const handleFile = (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    setFile(f);
+    setPreview(URL.createObjectURL(f));
+    setUploadedUrl(null);
+    setAiIdeas([]);
   };
 
-  const handleShare = async () => {
-    if (!image) return;
-    setIsLoading(true);
+  const uploadToCloudinary = async () => {
+    if (uploadedUrl) return uploadedUrl;
+    const formData = new FormData();
+    formData.append("image", file);
+    try {
+      const res = await api.post("/posts/upload-temp", formData);
+      setUploadedUrl(res.data.url);
+      return res.data.url;
+    } catch {
+      return null;
+    }
+  };
+
+  const generateCaption = async () => {
+    if (!preview) { toast.error("Upload an image first"); return; }
+    setAiLoading(true);
+    try {
+      const imageUrl = await uploadToCloudinary();
+      if (!imageUrl) {
+        toast.error("Could not process image for AI");
+        return;
+      }
+      const res = await api.post("/ai/generate-caption", { imageUrl, style: aiStyle });
+      setCaption(res.data.caption);
+      toast.success("Caption generated!");
+      setShowAI(false);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to generate caption");
+    } finally { setAiLoading(false); }
+  };
+
+ const generateIdeas = async () => {
+    if (!preview) { toast.error("Upload an image first"); return; }
+    setAiLoading(true);
+    setAiIdeas([]);
+    try {
+      const imageUrl = await uploadToCloudinary();
+      if (!imageUrl) {
+        toast.error("Could not process image for AI");
+        return;
+      }
+      const res = await api.post("/ai/caption-ideas", { imageUrl });
+      setAiIdeas(res.data.ideas || []);
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to get ideas");
+    } finally { setAiLoading(false); }
+  };
+
+  const handleSubmit = async () => {
+    if (!file) { toast.error("Please select an image or video"); return; }
+    setLoading(true);
     try {
       const formData = new FormData();
-      if (isReel) {
-        formData.append("video", image);
-        formData.append("caption", caption);
-        await api.post("/reels", formData, { headers: { "Content-Type": "multipart/form-data" } });
-        toast.success("Reel shared! 🎵");
-      } else {
-        formData.append("image", image);
-        formData.append("caption", caption);
-        formData.append("location", location);
-        formData.append("taggedUsers", JSON.stringify(taggedUsers.map(u => u._id)));
-        await api.post("/posts", formData, { headers: { "Content-Type": "multipart/form-data" } });
-        toast.success("Post shared! 📸");
-      }
+      formData.append(tab === "post" ? "image" : "video", file);
+      formData.append("caption", caption);
+      if (location) formData.append("location", location);
+      const endpoint = tab === "post" ? "/posts" : "/reels";
+      const res = await api.post(endpoint, formData);
+      toast.success(tab === "post" ? "Post shared!" : "Reel uploaded!");
+      onPostCreated?.(res.data.post || res.data.reel);
       onClose();
-    } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to share");
-    } finally {
-      setIsLoading(false);
-    }
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Failed to post");
+    } finally { setLoading(false); }
   };
-
-  const addTag = (user) => {
-    if (taggedUsers.length >= 10) { toast.error("Max 10 people"); return; }
-    if (!taggedUsers.some(u => u._id === user._id)) {
-      setTaggedUsers([...taggedUsers, user]);
-    }
-  };
-
-  const removeTag = (userId) => setTaggedUsers(taggedUsers.filter(u => u._id !== userId));
 
   return (
-    <>
-      <div className="fixed inset-0 bg-black/70 z-40 flex items-center justify-center p-4 animate-fade-in">
-        <div className="bg-white dark:bg-neutral-900 rounded-2xl w-full max-w-lg overflow-hidden animate-scale-in">
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className={`w-full max-w-lg rounded-2xl overflow-hidden ${isDark ? "bg-neutral-900" : "bg-white"} max-h-[90vh] overflow-y-auto`}
+        onClick={e => e.stopPropagation()}>
 
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-700">
-            {step !== "select" ? (
-              <button onClick={() => setStep(step === "share" ? "edit" : "select")}>
-                <ChevronLeft size={24} />
+        {/* Header */}
+        <div className={`flex items-center justify-between px-4 py-3 border-b ${isDark ? "border-gray-800" : "border-gray-200"}`}>
+          <button onClick={onClose}><X size={22} /></button>
+          <div className="flex gap-4">
+            {["post", "reel"].map(t => (
+              <button key={t} onClick={() => { setTab(t); setFile(null); setPreview(null); }}
+                className={`text-sm font-semibold capitalize pb-1 border-b-2 transition-colors ${tab === t ? "border-blue-500 text-blue-500" : "border-transparent text-gray-400"}`}>
+                {t === "post" ? "📸 Post" : "🎬 Reel"}
               </button>
-            ) : <div className="w-6" />}
-            <h2 className="font-semibold">{isReel ? "Create Reel 🎵" : "Create Post 📸"}</h2>
-            {step === "edit" ? (
-              <button onClick={() => setStep("share")} className="text-blue-500 font-semibold">Next</button>
-            ) : step === "share" ? (
-              <button onClick={handleShare} disabled={isLoading} className="text-blue-500 font-semibold disabled:opacity-50 flex items-center gap-1">
-                {isLoading ? <Loader size={18} className="animate-spin" /> : "Share"}
-              </button>
-            ) : (
-              <button onClick={onClose}><X size={24} /></button>
-            )}
+            ))}
           </div>
+          <button onClick={handleSubmit} disabled={loading || !file}
+            className="text-blue-500 font-semibold text-sm disabled:opacity-40">
+            {loading ? "Sharing..." : "Share"}
+          </button>
+        </div>
 
-          {/* Select Step */}
-          {step === "select" && (
-            <div>
-              <div className="flex gap-3 p-4 border-b border-gray-100 dark:border-gray-800">
-                <button onClick={() => { setIsReel(false); setImage(null); setPreview(null); }}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!isReel ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600"}`}>
-                  <ImagePlus size={16} /> Photo Post
-                </button>
-                <button onClick={() => { setIsReel(true); setImage(null); setPreview(null); }}
-                  className={`flex-1 py-2.5 rounded-xl text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${isReel ? "bg-blue-500 text-white" : "bg-gray-100 dark:bg-gray-800 text-gray-600"}`}>
-                  <Film size={16} /> Reel
-                </button>
-              </div>
-              <div className="flex flex-col items-center justify-center py-14 cursor-pointer" onClick={() => fileRef.current?.click()}>
-                {isReel ? <Film size={64} className="text-gray-300 mb-4" /> : <ImagePlus size={64} className="text-gray-300 mb-4" />}
-                <p className="text-xl font-light text-gray-600 mb-2">{isReel ? "Drag video here" : "Drag photos here"}</p>
-                <p className="text-gray-400 text-sm mb-6">{isReel ? "MP4, MOV supported" : "JPG, PNG, WEBP supported"}</p>
-                <button className="btn-primary text-sm px-6">{isReel ? "Select Video" : "Select Photo"}</button>
-                <input ref={fileRef} type="file"
-                  accept={isReel ? "video/mp4,video/mov,video/avi,video/webm" : "image/jpeg,image/png,image/webp"}
-                  className="hidden" onChange={handleFileSelect} />
-              </div>
-            </div>
-          )}
-
-          {/* Preview Step */}
-          {step === "edit" && preview && (
-            <div>
-              {isReel
-                ? <video src={preview} controls className="w-full max-h-80 object-cover" />
-                : <img src={preview} alt="Preview" className="w-full object-cover max-h-80" />
+        {/* Upload area */}
+        {!preview ? (
+          <div className="flex flex-col items-center justify-center py-16 cursor-pointer"
+            onClick={() => fileRef.current?.click()}>
+            <div className="text-5xl mb-3">{tab === "post" ? "📸" : "🎬"}</div>
+            <p className="font-semibold text-lg mb-1">
+              {tab === "post" ? "Select a photo" : "Select a video"}
+            </p>
+            <p className="text-sm text-gray-400 mb-4">
+              {tab === "post" ? "JPG, PNG, WEBP up to 5MB" : "MP4, MOV, WEBM up to 50MB"}
+            </p>
+            <button className="bg-blue-500 text-white px-6 py-2 rounded-xl text-sm font-semibold">
+              Browse files
+            </button>
+            <input ref={fileRef} type="file"
+              accept={tab === "post" ? "image/jpeg,image/png,image/webp" : "video/mp4,video/quicktime,video/webm"}
+              onChange={handleFile} className="hidden" />
+          </div>
+        ) : (
+          <div className="p-4 space-y-4">
+            {/* Preview */}
+            <div className="rounded-xl overflow-hidden bg-black flex items-center justify-center max-h-64">
+              {tab === "post"
+                ? <img src={preview} className="max-h-64 w-full object-contain" />
+                : <video src={preview} className="max-h-64 w-full" controls />
               }
-              <div className="p-4">
-                <p className="text-sm text-gray-500">{isReel ? "🎵 Looks good! Click Next." : "📸 Looks great! Click Next."}</p>
-              </div>
             </div>
-          )}
 
-          {/* Share Step */}
-          {step === "share" && (
-            <div className="p-4 space-y-3">
-              {preview && (isReel
-                ? <video src={preview} className="w-full h-40 object-cover rounded-xl" muted />
-                : <img src={preview} alt="Preview" className="w-full h-40 object-cover rounded-xl" />
-              )}
-              <textarea value={caption} onChange={(e) => setCaption(e.target.value)}
-                placeholder="Write a caption... use #hashtags"
-                className="input-field resize-none h-24" maxLength={2200} />
-
-              {!isReel && (
-                <>
-                  <input type="text" value={location} onChange={(e) => setLocation(e.target.value)}
-                    placeholder="📍 Add location" className="input-field" />
-
-                  {/* Tag People Button */}
-                  <button onClick={() => setShowTagModal(true)}
-                    className="w-full flex items-center gap-3 p-3 border border-gray-200 dark:border-gray-700 rounded-xl hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors">
-                    <UserPlus size={18} className="text-gray-500" />
-                    <span className="text-sm text-gray-600 dark:text-gray-400 flex-1 text-left">
-                      {taggedUsers.length > 0 ? `${taggedUsers.length} people tagged` : "Tag people"}
-                    </span>
-                    {taggedUsers.length > 0 && (
-                      <div className="flex -space-x-1">
-                        {taggedUsers.slice(0, 3).map(u => (
-                          <img key={u._id} src={u.avatar || `https://ui-avatars.com/api/?name=${u.fullName}&background=random`}
-                            className="w-6 h-6 rounded-full border-2 border-white dark:border-gray-900 object-cover" />
-                        ))}
-                      </div>
-                    )}
+            {/* Caption */}
+            <div>
+              <div className="flex items-center justify-between mb-1.5">
+                <label className="text-sm font-medium">Caption</label>
+                {tab === "post" && (
+                  <button onClick={() => setShowAI(!showAI)}
+                    className="flex items-center gap-1.5 text-xs font-semibold text-purple-500 hover:text-purple-600 transition-colors bg-purple-50 dark:bg-purple-950 px-3 py-1.5 rounded-full">
+                    <Sparkles size={13} />
+                    AI Caption
                   </button>
+                )}
+              </div>
 
-                  {/* Tagged users list */}
-                  {taggedUsers.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {taggedUsers.map(u => (
-                        <div key={u._id} className="flex items-center gap-1.5 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full text-xs font-medium">
-                          <img src={u.avatar || `https://ui-avatars.com/api/?name=${u.fullName}&background=random`}
-                            className="w-4 h-4 rounded-full object-cover" />
-                          @{u.username}
-                          <button onClick={() => removeTag(u._id)} className="hover:text-red-500 ml-0.5">
-                            <X size={10} />
-                          </button>
+              {/* AI Panel */}
+              {showAI && (
+                <div className={`mb-3 p-4 rounded-xl border ${isDark ? "border-purple-800 bg-purple-950/30" : "border-purple-200 bg-purple-50"}`}>
+                  <p className="text-sm font-semibold text-purple-600 dark:text-purple-400 mb-3 flex items-center gap-1.5">
+                    <Sparkles size={14} /> AI Caption Generator
+                  </p>
+
+                  {/* Style selector */}
+                  <div className="grid grid-cols-5 gap-1.5 mb-3">
+                    {STYLES.map(s => (
+                      <button key={s.key} onClick={() => setAiStyle(s.key)}
+                        className={`p-2 rounded-xl text-center text-xs transition-all ${aiStyle === s.key ? "bg-purple-500 text-white" : isDark ? "bg-gray-800 text-gray-300" : "bg-white text-gray-600 border border-gray-200"}`}>
+                        <div>{s.label}</div>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button onClick={generateCaption} disabled={aiLoading}
+                      className="flex-1 flex items-center justify-center gap-2 bg-purple-500 hover:bg-purple-600 text-white py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors">
+                      {aiLoading ? <RefreshCw size={14} className="animate-spin" /> : <Sparkles size={14} />}
+                      Generate
+                    </button>
+                    <button onClick={generateIdeas} disabled={aiLoading}
+                      className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-semibold disabled:opacity-50 transition-colors border ${isDark ? "border-purple-700 text-purple-400" : "border-purple-300 text-purple-600"}`}>
+                      {aiLoading ? <RefreshCw size={14} className="animate-spin" /> : "💡"}
+                      3 Ideas
+                    </button>
+                  </div>
+
+                  {/* AI Ideas */}
+                  {aiIdeas.length > 0 && (
+                    <div className="mt-3 space-y-2">
+                      {aiIdeas.map((idea, i) => (
+                        <div key={i} className={`p-3 rounded-xl cursor-pointer hover:ring-2 ring-purple-400 transition-all ${isDark ? "bg-gray-800" : "bg-white border border-gray-200"}`}
+                          onClick={() => { setCaption(idea.caption); setShowAI(false); toast.success("Caption applied!"); }}>
+                          <p className="text-xs font-semibold text-purple-500 mb-1">{idea.style}</p>
+                          <p className="text-sm">{idea.caption}</p>
                         </div>
                       ))}
                     </div>
                   )}
-                </>
+                </div>
               )}
-              <p className="text-xs text-gray-400 text-right">{caption.length}/2200</p>
-            </div>
-          )}
-        </div>
-      </div>
 
-      {showTagModal && (
-        <TagPeopleModal
-          tagged={taggedUsers}
-          onAdd={addTag}
-          onRemove={removeTag}
-          onClose={() => setShowTagModal(false)}
-        />
-      )}
-    </>
+              <textarea value={caption} onChange={e => setCaption(e.target.value)}
+                placeholder="Write a caption or use AI to generate one..."
+                rows={3} maxLength={2200}
+                className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none resize-none focus:ring-2 focus:ring-blue-500/20 ${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"}`} />
+              <p className="text-xs text-gray-400 text-right mt-1">{caption.length}/2200</p>
+            </div>
+
+            {/* Location */}
+            <input value={location} onChange={e => setLocation(e.target.value)}
+              placeholder="📍 Add location (optional)"
+              className={`w-full px-3 py-2.5 rounded-xl border text-sm outline-none ${isDark ? "bg-gray-800 border-gray-700" : "bg-gray-50 border-gray-200"}`} />
+
+            {/* Change file */}
+            <button onClick={() => { setFile(null); setPreview(null); setAiIdeas([]); }}
+              className="w-full text-center text-sm text-gray-400 hover:text-gray-600 py-1">
+              Change {tab === "post" ? "photo" : "video"}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

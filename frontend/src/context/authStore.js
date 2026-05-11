@@ -54,6 +54,32 @@ export const useAuthStore = create(
           set({ user: null, isAuthenticated: false });
         }
       },
+
+      // ─── Password Reset ───────────────────────────────────────────────
+
+      forgotPassword: async (email) => {
+        set({ isLoading: true });
+        try {
+          const res = await api.post("/auth/forgot-password", { email });
+          set({ isLoading: false });
+          return { success: true, message: res.data.message };
+        } catch (error) {
+          set({ isLoading: false });
+          return { success: false, message: error.response?.data?.message || "Something went wrong" };
+        }
+      },
+
+      resetPassword: async (token, newPassword) => {
+        set({ isLoading: true });
+        try {
+          const res = await api.post(`/auth/reset-password/${token}`, { newPassword });
+          set({ isLoading: false });
+          return { success: true, message: res.data.message };
+        } catch (error) {
+          set({ isLoading: false });
+          return { success: false, message: error.response?.data?.message || "Reset failed" };
+        }
+      },
     }),
     {
       name: "snapgram-auth",

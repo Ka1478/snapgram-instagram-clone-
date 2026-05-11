@@ -1,5 +1,5 @@
 ﻿import { Link, useLocation } from "react-router-dom";
-import { Home, Compass, Film, MessageCircle, Bell, PlusSquare, User, Sun, Moon, LogOut } from "lucide-react";
+import { Home, Compass, Film, MessageCircle, Bell, PlusSquare, User, Sun, Moon, LogOut, Users } from "lucide-react";
 import { useAuthStore } from "../../context/authStore";
 import { useState, useEffect } from "react";
 import { useTheme } from "../../context/ThemeContext";
@@ -42,6 +42,7 @@ export default function Sidebar() {
     { to: "/explore", icon: Compass, label: "Explore" },
     { to: "/reels", icon: Film, label: "Reels" },
     { to: "/messages", icon: MessageCircle, label: "Messages" },
+    { to: "/groups", icon: Users, label: "Groups" },
     { to: "/notifications", icon: Bell, label: "Notifications", badge: unreadCount },
     { to: `/profile/${user?.username}`, icon: User, label: "Profile" },
   ];
@@ -107,8 +108,9 @@ export default function Sidebar() {
             { to: "/", icon: Home },
             { to: "/explore", icon: Compass },
             { to: "/reels", icon: Film },
-            { to: "/messages", icon: MessageCircle },
-            { to: "/notifications", icon: Bell, badge: unreadCount },
+           { to: "/messages", icon: MessageCircle },
+{ to: "/groups", icon: Users },
+{ to: "/notifications", icon: Bell, badge: unreadCount },
           ].map(({ to, icon: Icon, badge }) => (
             <Link key={to} to={to}
               onClick={() => { if (to === "/notifications") setUnreadCount(0); }}

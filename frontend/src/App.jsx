@@ -6,11 +6,14 @@ import { SocketProvider } from "./context/SocketContext";
 import { useAuthStore } from "./context/authStore";
 import MainLayout from "./components/layout/MainLayout";
 import LoadingSpinner from "./components/ui/LoadingSpinner";
+import GroupChatPage from "./pages/GroupChatPage";
 
 // Lazy loaded pages
 const EditProfilePage = lazy(() => import("./pages/EditProfilePage"));
 const LoginPage = lazy(() => import("./pages/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/RegisterPage"));
+const ForgotPasswordPage = lazy(() => import("./pages/ForgotPasswordPage"));
+const ResetPasswordPage = lazy(() => import("./pages/ResetPasswordPage"));
 const HomePage = lazy(() => import("./pages/HomePage"));
 const ExplorePage = lazy(() => import("./pages/ExplorePage"));
 const ProfilePage = lazy(() => import("./pages/ProfilePage"));
@@ -54,6 +57,10 @@ export default function App() {
               <Route path="/login" element={<PublicRoute><LoginPage /></PublicRoute>} />
               <Route path="/register" element={<PublicRoute><RegisterPage /></PublicRoute>} />
 
+              {/* Password reset routes — accessible whether logged in or not */}
+              <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+              <Route path="/reset-password/:token" element={<ResetPasswordPage />} />
+
               {/* Protected routes */}
               <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
                 <Route index element={<HomePage />} />
@@ -66,6 +73,7 @@ export default function App() {
                 <Route path="notifications" element={<NotificationsPage />} />
                 <Route path="reels" element={<ReelsPage />} />
                 <Route path="hashtag/:tag" element={<HashtagPage />} />
+                <Route path="/groups" element={<GroupChatPage />} />
               </Route>
 
               <Route path="*" element={<Navigate to="/" replace />} />

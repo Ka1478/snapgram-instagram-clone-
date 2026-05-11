@@ -80,10 +80,11 @@ export default function LoginPage() {
             <div className="flex-1 border-t border-gray-200 dark:border-gray-700" />
           </div>
 
+          {/* ✅ Now a real link instead of dead href="#" */}
           <p className="text-center text-sm">
-            <a href="#" className="text-blue-500 font-semibold hover:underline">
+            <Link to="/forgot-password" className="text-blue-500 font-semibold hover:underline">
               Forgot password?
-            </a>
+            </Link>
           </p>
         </div>
 

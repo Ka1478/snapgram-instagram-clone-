@@ -6,6 +6,9 @@ import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 
+import groupChatRoutes from "./routes/groupChat.route.js"; 
+import quizRoutes from "./routes/quizBattle.route.js";
+
 import authRoutes from "./routes/auth.route.js";
 import userRoutes from "./routes/user.route.js";
 import postRoutes from "./routes/post.route.js";
@@ -17,6 +20,8 @@ import aiRoutes from "./routes/ai.route.js";
 import hashtagRoutes from "./routes/hashtag.route.js";
 
 dotenv.config();
+
+console.log("DEBUG →", process.env.EMAIL_USER, process.env.EMAIL_PASS);
 
 const app = express();
 const httpServer = createServer(app);
@@ -79,6 +84,14 @@ io.on("connection", (socket) => {
     if (s) io.to(s).emit("callRejected");
   });
 
+  socket.on("joinGroup", (groupId) => {
+  socket.join(`group_${groupId}`);
+});
+
+socket.on("joinGroup", (groupId) => {
+  socket.join(`group_${groupId}`);
+});
+
   socket.on("disconnect", () => {
     onlineUsers.delete(userId);
     io.emit("onlineUsers", Array.from(onlineUsers.keys()));
@@ -104,6 +117,9 @@ app.use("/api/stories", storyRoutes);
 app.use("/api/reels", reelRoutes);
 app.use("/api/hashtags", hashtagRoutes);
 
+app.use("/api/groups", groupChatRoutes);
+app.use("/api/quiz", quizRoutes);
+
 app.use("/api/ai", aiRoutes);
 
 mongoose.connect(process.env.MONGODB_URI)
@@ -114,6 +130,8 @@ mongoose.connect(process.env.MONGODB_URI)
     });
   })
   .catch((err) => console.error("MongoDB error:", err));
+
+  console.log("EMAIL_USER:", process.env.EMAIL_USER);
 
 
 

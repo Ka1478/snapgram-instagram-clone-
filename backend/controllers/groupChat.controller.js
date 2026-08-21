@@ -7,7 +7,6 @@ const getGroq = () => {
   return groq;
 };
 
-// Create group
 export const createGroup = async (req, res) => {
   try {
     const { name, memberIds } = req.body;
@@ -21,7 +20,6 @@ export const createGroup = async (req, res) => {
   }
 };
 
-// Get my groups
 export const getMyGroups = async (req, res) => {
   try {
     const groups = await GroupChat.find({ members: req.user._id })
@@ -35,7 +33,6 @@ export const getMyGroups = async (req, res) => {
   }
 };
 
-// Get group messages
 export const getGroupMessages = async (req, res) => {
   try {
     const group = await GroupChat.findById(req.params.groupId)
@@ -51,7 +48,6 @@ export const getGroupMessages = async (req, res) => {
   }
 };
 
-// Send message in group
 export const sendGroupMessage = async (req, res) => {
   try {
     const { text } = req.body;
@@ -82,7 +78,6 @@ export const sendGroupMessage = async (req, res) => {
   }
 };
 
-// AI answer in group chat
 export const askAI = async (req, res) => {
   console.log("ASK AI HIT", req.body);
   try {
@@ -90,13 +85,10 @@ export const askAI = async (req, res) => {
     if (!question && !imageBase64 && !pdfText)
       return res.status(400).json({ success: false, message: "Question or file required" });
 
-    // Build message content
     const content = [];
 
-    // Add text question
     if (question) content.push({ type: "text", text: question });
 
-    // Add image if provided
     if (imageBase64 && imageType) {
       content.push({
         type: "image_url",
@@ -104,7 +96,6 @@ export const askAI = async (req, res) => {
       });
     }
 
-    // Add PDF text if provided
     if (pdfText) {
       content.push({
         type: "text",
@@ -113,13 +104,17 @@ export const askAI = async (req, res) => {
     }
 
     const response = await getGroq().chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3.6-27b",  // ✅ fixed
       messages: [{ role: "user", content }],
       max_tokens: 1000,
+      reasoning_effort: "none",
     });
 
-    const answer = response.choices[0]?.message?.content?.trim();
+    let answer = response.choices[0]?.message?.content?.trim();
     if (!answer) throw new Error("No response from AI");
+
+    // Strip <think> block if present
+    answer = answer.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
     const group = await GroupChat.findById(groupId);
     if (group) {
@@ -140,7 +135,6 @@ export const askAI = async (req, res) => {
   }
 };
 
-// AI generates MCQ
 export const generateMCQ = async (req, res) => {
   console.log("MCQ HIT", req.body);
   try {
@@ -148,10 +142,10 @@ export const generateMCQ = async (req, res) => {
     if (!topic) return res.status(400).json({ success: false, message: "Topic required" });
 
     const response = await getGroq().chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3.6-27b",  // ✅ fixed
       messages: [{
         role: "user",
-       content: `Generate 10 different MCQ questions about "${topic}". Return ONLY a raw JSON array with no explanation, no markdown, no backticks, no extra text. Format exactly like this:
+        content: `Generate 10 different MCQ questions about "${topic}". Return ONLY a raw JSON array with no explanation, no markdown, no backticks, no extra text. Format exactly like this:
 [
   {"question":"...","options":["A) ...","B) ...","C) ...","D) ..."],"answer":"A"},
   {"question":"...","options":["A) ...","B) ...","C) ...","D) ..."],"answer":"B"}
@@ -159,42 +153,42 @@ export const generateMCQ = async (req, res) => {
 Make all 10 questions unique and cover different aspects of the topic.`,
       }],
       max_tokens: 3000,
+      reasoning_effort: "none",
     });
 
-    const raw = response.choices[0]?.message?.content?.trim();
+    let raw = response.choices[0]?.message?.content?.trim();
+
+    // Strip <think> block if present
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
     console.log("MCQ RAW RESPONSE:", raw);
 
-    // Extract JSON even if Groq adds text before/after it
-   const jsonMatch = raw.match(/\[[\s\S]*\]/);
-if (!jsonMatch) throw new Error("AI did not return valid JSON");
-const mcqs = JSON.parse(jsonMatch[0]);
+    const jsonMatch = raw.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) throw new Error("AI did not return valid JSON");
+    const mcqs = JSON.parse(jsonMatch[0]);
 
-if (!Array.isArray(mcqs) || mcqs.length === 0) {
-  throw new Error("Invalid MCQ structure from AI");
-}
-
-// Save all MCQs as separate messages
-const group = await GroupChat.findById(groupId);
-if (group) {
-  for (const mcq of mcqs) {
-    if (!mcq.question || !mcq.options || !mcq.answer) continue;
-    group.messages.push({ isAI: true, text: `📝 MCQ: ${mcq.question}`, mcq });
-  }
-  group.lastMessage = `📝 AI posted ${mcqs.length} MCQs`;
-  await group.save();
-  try {
-    const { io } = await import("../index.js");
-    // Emit each MCQ message individually
-    const aiMessages = group.messages.slice(-mcqs.length);
-    for (const msg of aiMessages) {
-      io.to(`group_${groupId}`).emit("newGroupMessage", { groupId, message: msg });
+    if (!Array.isArray(mcqs) || mcqs.length === 0) {
+      throw new Error("Invalid MCQ structure from AI");
     }
-  } catch {}
-}
 
-res.json({ success: true, mcqs });
+    const group = await GroupChat.findById(groupId);
+    if (group) {
+      for (const mcq of mcqs) {
+        if (!mcq.question || !mcq.options || !mcq.answer) continue;
+        group.messages.push({ isAI: true, text: `📝 MCQ: ${mcq.question}`, mcq });
+      }
+      group.lastMessage = `📝 AI posted ${mcqs.length} MCQs`;
+      await group.save();
+      try {
+        const { io } = await import("../index.js");
+        const aiMessages = group.messages.slice(-mcqs.length);
+        for (const msg of aiMessages) {
+          io.to(`group_${groupId}`).emit("newGroupMessage", { groupId, message: msg });
+        }
+      } catch {}
+    }
 
-    
+    res.json({ success: true, mcqs });
   } catch (err) {
     console.error("MCQ ERROR:", err);
     res.status(500).json({ success: false, message: err.message });

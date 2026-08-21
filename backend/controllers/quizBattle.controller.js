@@ -7,15 +7,13 @@ const getGroq = () => {
   return groq;
 };
 
-// Start a new quiz battle — generates MCQ and waits for opponent
 export const startBattle = async (req, res) => {
   try {
     const { groupId, topic } = req.body;
     if (!groupId || !topic) return res.status(400).json({ success: false, message: "groupId and topic required" });
 
-    // Generate MCQ using Groq
     const response = await getGroq().chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3.6-27b",  // ✅ fixed
       messages: [{
         role: "user",
         content: `Generate 10 different challenging MCQ questions about "${topic}". Return ONLY a raw JSON array, no explanation, no markdown, no backticks:
@@ -26,34 +24,37 @@ export const startBattle = async (req, res) => {
 Make all 10 questions unique, progressively harder, covering different aspects.`,
       }],
       max_tokens: 3000,
+      reasoning_effort: "none",  // ✅ no <think> blocks
     });
 
-    const raw = response.choices[0]?.message?.content?.trim();
+    let raw = response.choices[0]?.message?.content?.trim();
+
+    // Strip <think> block if present
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
     const jsonMatch = raw.match(/\[[\s\S]*\]/);
-if (!jsonMatch) throw new Error("AI did not return valid JSON");
-const mcqs = JSON.parse(jsonMatch[0]);
+    if (!jsonMatch) throw new Error("AI did not return valid JSON");
+    const mcqs = JSON.parse(jsonMatch[0]);
 
-if (!Array.isArray(mcqs) || mcqs.length === 0) throw new Error("Invalid MCQ from AI");
+    if (!Array.isArray(mcqs) || mcqs.length === 0) throw new Error("Invalid MCQ from AI");
 
-// Pick first valid question to start, store all as questions array
-const firstMCQ = mcqs[0];
+    const firstMCQ = mcqs[0];
 
-const battle = await QuizBattle.create({
-  groupId,
-  question: firstMCQ.question,
-  options: firstMCQ.options,
-  answer: firstMCQ.answer,
-  allQuestions: mcqs,          // store all 10 questions
-  currentQuestion: 0,          // track which question is active
-  startedBy: req.user._id,
-  challenger: req.user._id,
-  topic,
-  status: "waiting",
-});
+    const battle = await QuizBattle.create({
+      groupId,
+      question: firstMCQ.question,
+      options: firstMCQ.options,
+      answer: firstMCQ.answer,
+      allQuestions: mcqs,
+      currentQuestion: 0,
+      startedBy: req.user._id,
+      challenger: req.user._id,
+      topic,
+      status: "waiting",
+    });
 
     await battle.populate("challenger", "username avatar");
 
-    // Notify group via socket
     try {
       const { io } = await import("../index.js");
       io.to(`group_${groupId}`).emit("quizBattleStarted", { battle });
@@ -66,7 +67,6 @@ const battle = await QuizBattle.create({
   }
 };
 
-// Join an existing battle as opponent
 export const joinBattle = async (req, res) => {
   try {
     const { battleId } = req.params;
@@ -84,7 +84,6 @@ export const joinBattle = async (req, res) => {
     await battle.save();
     await battle.populate("opponent", "username avatar");
 
-    // Notify group via socket
     try {
       const { io } = await import("../index.js");
       io.to(`group_${battle.groupId}`).emit("quizBattleJoined", { battle });
@@ -97,7 +96,6 @@ export const joinBattle = async (req, res) => {
   }
 };
 
-// Submit answer
 export const submitAnswer = async (req, res) => {
   try {
     const { battleId } = req.params;
@@ -118,26 +116,20 @@ export const submitAnswer = async (req, res) => {
     const correct = answer === battle.answer;
     battle.answers.push({ user: req.user._id, answer, correct, answeredAt: new Date() });
 
-    // If this is the first correct answer → they win
     const firstCorrect = battle.answers.find(a => a.correct);
     if (firstCorrect && !battle.winner) {
       battle.winner = firstCorrect.user;
       battle.status = "finished";
     }
 
-    // If both answered → finish battle
     if (battle.answers.length >= 2) {
       battle.status = "finished";
-      if (!battle.winner) {
-        // Both wrong — no winner
-        battle.winner = null;
-      }
+      if (!battle.winner) battle.winner = null;
     }
 
     await battle.save();
     await battle.populate("winner", "username avatar");
 
-    // Notify group via socket
     try {
       const { io } = await import("../index.js");
       io.to(`group_${battle.groupId}`).emit("quizBattleUpdated", { battle });
@@ -150,7 +142,6 @@ export const submitAnswer = async (req, res) => {
   }
 };
 
-// Get active battles for a group
 export const getGroupBattles = async (req, res) => {
   try {
     const { groupId } = req.params;

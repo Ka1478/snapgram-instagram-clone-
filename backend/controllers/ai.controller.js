@@ -2,15 +2,6 @@
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
-// Helper: fetch image from URL and convert to base64
-const urlToBase64 = async (imageUrl) => {
-  const response = await fetch(imageUrl);
-  const buffer = await response.arrayBuffer();
-  const base64 = Buffer.from(buffer).toString("base64");
-  const contentType = response.headers.get("content-type") || "image/jpeg";
-  return { base64, contentType };
-};
-
 export const generateCaption = async (req, res) => {
   try {
     const { imageUrl, style } = req.body;
@@ -25,30 +16,33 @@ export const generateCaption = async (req, res) => {
     };
 
     const styleInstruction = stylePrompts[style] || stylePrompts.casual;
-    const { base64, contentType } = await urlToBase64(imageUrl);
 
     const response = await groq.chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3.6-27b",
       messages: [
         {
           role: "user",
           content: [
             {
               type: "text",
-              text: `Look at this image and ${styleInstruction} Make it engaging and authentic. Return only the caption text, nothing else.`,
+              text: `Look at this image and ${styleInstruction} Make it engaging and authentic. Return only the caption text, nothing else. Do not include any thinking or reasoning.`,
             },
             {
               type: "image_url",
-              image_url: { url: `data:${contentType};base64,${base64}` },
+              image_url: { url: imageUrl },
             },
           ],
         },
       ],
       max_tokens: 200,
+      reasoning_effort: "none",
     });
 
-    const caption = response.choices[0]?.message?.content?.trim();
+    let caption = response.choices[0]?.message?.content?.trim();
     if (!caption) return res.status(500).json({ success: false, message: "Failed to generate caption" });
+
+    // Strip <think>...</think> block if present
+    caption = caption.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
 
     res.json({ success: true, caption });
   } catch (err) {
@@ -62,10 +56,8 @@ export const generateCaptionIdeas = async (req, res) => {
     const { imageUrl } = req.body;
     if (!imageUrl) return res.status(400).json({ success: false, message: "Image URL required" });
 
-    const { base64, contentType } = await urlToBase64(imageUrl);
-
     const response = await groq.chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3.6-27b",
       messages: [
         {
           role: "user",
@@ -77,20 +69,27 @@ export const generateCaptionIdeas = async (req, res) => {
 2) Inspirational/motivational
 3) Witty/funny
 Format as a JSON array with keys: style, caption. Include 3-5 hashtags in each.
-Return only valid JSON with no markdown or backticks.`,
+Return only valid JSON with no markdown or backticks. Do not include any thinking or reasoning.`,
             },
             {
               type: "image_url",
-              image_url: { url: `data:${contentType};base64,${base64}` },
+              image_url: { url: imageUrl },
             },
           ],
         },
       ],
       max_tokens: 400,
+      reasoning_effort: "none",
     });
 
-    const raw = response.choices[0]?.message?.content?.trim();
+    let raw = response.choices[0]?.message?.content?.trim();
+
+    // Strip <think>...</think> block if present
+    raw = raw.replace(/<think>[\s\S]*?<\/think>/g, "").trim();
+
+    // Clean any markdown code fences
     const cleaned = raw.replace(/```json|```/g, "").trim();
+
     const ideas = JSON.parse(cleaned);
     res.json({ success: true, ideas });
   } catch (err) {

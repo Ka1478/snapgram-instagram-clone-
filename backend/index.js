@@ -125,8 +125,8 @@ app.use("/api/ai", aiRoutes);
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => {
     console.log("✅ MongoDB connected");
-    httpServer.listen(process.env.PORT || 5000, () => {
-      console.log(`🚀 Server running on port ${process.env.PORT || 5000}`);
+    httpServer.listen(process.env.PORT || 5003, () => {
+      console.log(`🚀 Server running on port ${process.env.PORT || 5003}`);
     });
   })
   .catch((err) => console.error("MongoDB error:", err));
@@ -135,8 +135,6 @@ mongoose.connect(process.env.MONGODB_URI)
 
 
 
-const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 
 
